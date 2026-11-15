@@ -1,0 +1,84 @@
+models:
+  control: claude-sonnet-5-5
+  triage: claude-haiku-5-5      # cheap model is fine for triage; swap to sonnet if you want deeper analysis
+
+data_dir: data
+
+# ---------------------------------------------------------------- control agent
+# Anything not listed here is DENIED. This allowlist, not the LLM, is the real safety control.
+control:
+  allowed_domains: [light, switch, climate, cover, fan, scene, media_player, input_boolean]
+  readable_domains: [sensor, binary_sensor, weather, person, sun, device_tracker, camera, zone]   # can be READ in chat, never controlled
+  confirm_domains: [lock, alarm_control_panel]       # always need your YES
+  confirm_entities: []                               # e.g. [cover.garage_door, switch.oven_plug]
+  blocked_entities: []                               # never visible to the agent
+  allowed_services:
+    - turn_on
+    - turn_off
+    - toggle
+    - set_temperature
+    - set_hvac_mode
+    - set_percentage
+    - open_cover
+    - close_cover
+    - stop_cover
+    - set_cover_position
+    - lock
+    - unlock
+    - alarm_arm_home
+    - alarm_arm_away
+    - alarm_arm_night
+    - alarm_disarm
+    - media_play
+    - media_pause
+    - volume_set
+  max_targets: 10
+  approval_timeout_s: 120
+
+# ---------------------------------------------------------------- security monitor
+monitor:
+  interval_s: 60
+  ha_logins:
+    window_s: 600
+    threshold: 5            # failed logins from one IP inside the window => event
+  entities:
+    # Entities that indicate Zigbee "permit join" is open (e.g. Zigbee2MQTT's switch). ZHA has no such entity.
+    permit_join_entities: []   # e.g. [switch.zigbee2mqtt_bridge_permit_join]
+  health:                   # offline/removed devices, low battery, low printer ink
+    enabled: true
+    unavailable_after_s: 600   # a device must be unavailable this long before it is reported
+    battery_below: 20          # percent
+    ink_below: 15              # percent (sensors with "ink" or "toner" in the name)
+    ignore_entities: []        # globs, e.g. ["light.bedroom_*", "sensor.phone_*"]
+    # domains: [sensor, binary_sensor, light, ...]   # override which domains are watched
+  connectivity:             # internet / router outages
+    enabled: true
+    gateway: ""             # blank = detect the default gateway automatically
+  cameras:                  # person detection on camera motion (cameras and motion sensors are found automatically)
+    enabled: true
+    # model: claude-sonnet-5-5      # default is the cheaper triage model; use a bigger one for fewer misses
+    cooldown_s: 45                  # minimum seconds between checks of the same camera
+    max_checks_per_day: 200         # hard cost limit
+    frames: 3                       # snapshots taken per motion event
+    alert_animals: false            # true = also push for pets/animals
+    ignore: []                      # camera entities to skip, e.g. ["camera.baby_room"]
+    # map: {camera.front: [binary_sensor.front_motion]}   # only if auto-pairing is wrong
+    people_notes: []                # e.g. ["Older man gardening near the front fence in the morning is Grandpa"]
+  arp:
+    enabled: false          # needs to run on the same LAN/host network as your devices (e.g. on the NUC)
+    scan_cidr: ""           # e.g. 192.168.1.0/24 (uses nmap -sn if nmap is installed)
+    known_macs: []          # MACs you trust, lowercase
+  host_auth:
+    enabled: false          # sshd failed logins on the machine running this
+    path: /var/log/auth.log
+    window_s: 600
+    threshold: 5
+
+# ---------------------------------------------------------------- automatic responses
+actions:
+  # AUTO tier (no approval): notify, disable Zigbee permit join, HA persistent notification
+  permit_join_entities: []          # usually same list as above
+  # APPROVE tier (needs your YES):
+  lockdown_scene: ""                # e.g. scene.lockdown
+  block_ip_command: []              # argv list, {ip} is substituted. e.g. ["ssh","router","iptables -I INPUT -s {ip} -j DROP"]
+  approval_timeout_s: 300
