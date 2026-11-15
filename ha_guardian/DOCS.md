@@ -20,7 +20,7 @@ The chat page only accepts requests that come through Home Assistant's own login
 ## Camera person detection
 When a camera's motion sensor fires, the add-on takes a few snapshots and asks Claude whether a real person is there.
 People get a push with a one-line description and the camera picture. Leaves, shadows, rain and (by default) animals are
-logged quietly in `camera_checks.jsonl` and never pushed. Cameras and motion sensors are found automatically. Snapshots
+logged quietly in `camera_checks.jsonl` and never pushed. Cameras and motion sensors are found automatically; a camera with no motion sensor in Home Assistant is watched by comparing snapshots every 5 s (only a big change wakes Claude). Snapshots
 are sent to Anthropic's API for this check. Limits: 45 s between checks per camera and 200 checks per day (changeable
 under `monitor.cameras` in the config). Add `people_notes` there to get "probably Grandpa" style hints; these are
 guesses from your wording, never face recognition.

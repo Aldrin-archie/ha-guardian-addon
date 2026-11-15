@@ -7,7 +7,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-RUN pip install --no-cache-dir anthropic httpx pyyaml websockets
+RUN pip install --no-cache-dir anthropic httpx pyyaml websockets pillow
 
 COPY guardian ./guardian
 COPY guardian_default_config.yaml ./default_config.yaml

@@ -6,6 +6,7 @@ sensors are discovered automatically (same Home Assistant device, or matching en
 from __future__ import annotations
 
 import base64
+import io
 import json
 import logging
 import re
@@ -82,6 +83,15 @@ class CameraWatcher:
         self.alert_animals = bool(c.get("alert_animals", False))
         self.notes = [str(n) for n in c.get("people_notes", [])]
         self.ignore = set(c.get("ignore", []))
+        # Fallback for cameras with no motion sensor in HA: compare snapshots ourselves, call Claude only on change.
+        self.frame_diff = c.get("frame_diff", True) is not False
+        self.diff_interval = float(c.get("diff_interval_s", 5))
+        self.diff_level = int(c.get("diff_level", 25))       # per-pixel change (0-255) that counts as "changed"
+        self.diff_area = float(c.get("diff_area", 0.01))     # fraction of the picture that must change
+        self.fallback_cooldown = int(c.get("fallback_cooldown_s", 90))
+        self.polled: set[str] = set()
+        self.small: dict[str, bytes] = {}
+        self.last_poll: dict[str, float] = {}
         self.explicit = c.get("map") or {}
         self.mapping: dict[str, list[str]] = {}
         self.mapped_at = -1e9
@@ -104,6 +114,9 @@ class CameraWatcher:
                 continue
             if motion:
                 log.info("Camera %s watched via %s", cam, ", ".join(motion))
+            elif self.frame_diff:
+                log.info("Camera %s has no motion sensor in Home Assistant: watching for movement by comparing snapshots "
+                         "every %ss.", cam, self.diff_interval)
             else:
                 log.warning("Camera %s has no motion sensor in Home Assistant, so it cannot trigger checks. "
                             "Enable motion detection for it, or set cameras.map in the config.", cam)
@@ -127,6 +140,34 @@ class CameraWatcher:
                 self.prev[m] = st
             if fired:
                 self.handle(cam, now)
+            elif not motion and self.frame_diff:
+                self._diff_check(cam, now)
+
+    def _small(self, content: bytes) -> bytes:
+        from PIL import Image
+
+        im = Image.open(io.BytesIO(content)).convert("L").resize((64, 36), Image.BOX)
+        return im.tobytes()
+
+    def _diff_check(self, cam: str, now: float) -> None:
+        if now - self.last_poll.get(cam, -1e9) < self.diff_interval:
+            return
+        self.last_poll[cam] = now
+        self.polled.add(cam)
+        try:
+            r = self.ha.http.get(f"/api/camera_proxy/{cam}")
+            if r.status_code != 200 or not r.content:
+                return
+            small = self._small(r.content)
+        except Exception as e:
+            log.debug("snapshot compare failed for %s: %s", cam, e)
+            return
+        prev, self.small[cam] = self.small.get(cam), small
+        if prev is None or len(prev) != len(small):
+            return
+        changed = sum(1 for a, b in zip(prev, small) if abs(a - b) > self.diff_level) / len(small)
+        if changed >= self.diff_area:
+            self.handle(cam, now)
 
     def run(self) -> None:
         while True:
@@ -138,7 +179,8 @@ class CameraWatcher:
 
     # -- one motion event ------------------------------------------------------------------
     def handle(self, cam: str, now: float) -> None:
-        if now - self.last_check.get(cam, -1e9) < self.cooldown:
+        cooldown = self.fallback_cooldown if cam in self.polled else self.cooldown
+        if now - self.last_check.get(cam, -1e9) < cooldown:
             return
         today = date.fromtimestamp(now).isoformat()
         if today != self.day:
