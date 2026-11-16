@@ -1,5 +1,5 @@
 name: HA Guardian
-version: "0.6.4"
+version: "0.6.5"
 slug: ha_guardian
 description: Claude-powered home control over Telegram plus a security monitor that watches for attacks
 arch:

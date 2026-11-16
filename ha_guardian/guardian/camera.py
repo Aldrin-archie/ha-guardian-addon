@@ -30,7 +30,7 @@ If the user message lists people already seen on this camera a moment ago, set "
 person only when they clearly match one of those descriptions (same clothing and build). If unsure, set it to false.
 Reply with ONE JSON object and nothing else:
 {"person": true|false, "confidence": "low"|"medium"|"high", "animals": ["cat", ...],
- "people": [{"description": "appearance only, max 20 words, e.g. An older man with grey hair in a green jacket and cap.",
+ "people": [{"description": "appearance only, max 12 words, e.g. Older man, grey hair, green jacket, cap.",
              "known_from_earlier": true|false,
              "probably_known": null or "<a name written in the household notes, only if that note clearly fits what you see>"}]}
 Never name anyone because their phone is home; presence is context for the owner, not evidence about who is on camera."""
@@ -325,7 +325,7 @@ class CameraWatcher:
             return cam
 
     @staticmethod
-    def _shrink(content: bytes, max_side: int = 1024) -> tuple[str, bytes]:
+    def _shrink(content: bytes, max_side: int = 800) -> tuple[str, bytes]:
         """Downscale big snapshots: faster upload and analysis, plenty of detail to spot a person."""
         try:
             from PIL import Image

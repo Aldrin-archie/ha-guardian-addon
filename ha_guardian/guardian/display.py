@@ -21,7 +21,7 @@ def lan_ip() -> str:
 class CastDisplay:
     def __init__(self, ha, players, port=8765, seconds=10, host=None, live=False):
         self.ha, self.players, self.port, self.seconds = ha, list(players), int(port), int(seconds)
-        self.live, self.gen = live, 0
+        self.live, self.gen, self.last_show = live, 0, 0.0
         self.host = host
         self.images: dict[str, bytes] = {}
         self.lock = threading.Lock()
@@ -83,7 +83,7 @@ class CastDisplay:
                 try:
                     before = self.ha.state(p).get("state")
                     log.info("display: %s is '%s' before the picture", p, before)
-                    if before not in ("idle", "off", "standby", "unavailable"):
+                    if before not in ("idle", "off", "standby", "unavailable") and time.time() - self.last_show > self.seconds + 5:
                         # a leftover session (e.g. a paused video) can keep the picture from showing: close it first
                         self.ha.call_service("media_player", "turn_off", {"entity_id": p})
                         time.sleep(1.5)
