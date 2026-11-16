@@ -94,11 +94,23 @@ def discover(states: list[dict], registry: dict[str, str], explicit: dict | None
             base = _base(cam)  # camera.front_cam_live_view -> front_cam, to match binary_sensor.front_cam_person_detection
             mine = [m for m in cand if m.split(".", 1)[1].startswith(base + "_") or m.split(".", 1)[1] == base]
         out[cam] = mine
-    # Two camera entities driven by the very same sensors are one physical camera (e.g. TP-Link + ONVIF entries):
-    # watch it once, preferring the entity that is not a raw "...stream" feed.
+    def pref(c: str):  # prefer the user-named entity over a raw "...stream" feed
+        return (c.split(".", 1)[1].endswith(("stream", "_main", "_sub")), c)
+
+    # Camera entities that belong to the same physical device (same MAC, e.g. a camera added through both TP-Link and
+    # ONVIF) are one camera: watch it once, with the combined sensors of all its entries.
+    groups: dict[str, list[str]] = {}
+    for cam in out:
+        groups.setdefault(registry.get(cam) or cam, []).append(cam)
+    merged: dict[str, list[str]] = {}
+    for members in groups.values():
+        best = sorted(members, key=pref)[0]
+        merged[best] = list(dict.fromkeys(m for c in members for m in out[c]))
+    out = merged
+    # Two camera entities driven by the very same sensors are also one physical camera (pairing by name).
     kept: dict[str, list[str]] = {}
     used: set[tuple] = set()
-    for cam in sorted(out, key=lambda c: (c.split(".", 1)[1].endswith(("stream", "_main", "_sub")), c)):
+    for cam in sorted(out, key=pref):
         key = tuple(sorted(out[cam]))
         if key and key in used:
             continue
