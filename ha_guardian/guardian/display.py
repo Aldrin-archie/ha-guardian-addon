@@ -64,14 +64,31 @@ class CastDisplay:
         self.server = ThreadingHTTPServer(("0.0.0.0", self.port), H)
         threading.Thread(target=self.server.serve_forever, daemon=True, name="display-http").start()
 
-    def show(self, jpeg: bytes, camera: str | None = None) -> None:
-        """Fire and forget: never delays or breaks the phone alert."""
-        threading.Thread(target=self._show, args=(jpeg, camera), daemon=True).start()
-
-    def _show(self, jpeg: bytes, camera: str | None = None) -> None:
+    def show(self, jpeg: bytes, camera: str | None = None) -> int:
+        """Fire and forget: never delays or breaks the phone alert. Returns a ticket for clear()."""
         with self.lock:
             self.gen += 1
             mine = self.gen
+        threading.Thread(target=self._show, args=(jpeg, camera, mine), daemon=True).start()
+        return mine
+
+    def clear(self, ticket: int) -> None:
+        """Take the picture down again, unless a newer one has replaced it."""
+        with self.lock:
+            if self.gen != ticket:
+                return
+            self.gen += 1
+        for p in self.players:
+            try:
+                self.ha.call_service("media_player", "turn_off", {"entity_id": p})
+            except Exception:
+                pass
+
+    def _show(self, jpeg: bytes, camera: str | None = None, mine: int | None = None) -> None:
+        if mine is None:
+            with self.lock:
+                self.gen += 1
+                mine = self.gen
         try:
             self._start()
             token = secrets.token_urlsafe(16)  # unguessable path: only the display we tell can fetch the picture

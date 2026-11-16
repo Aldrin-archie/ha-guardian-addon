@@ -132,6 +132,7 @@ class CameraWatcher:
         c = cfg or {}
         self.ha, self.client, self.model, self.channel = ha, client, model, channel
         self.display = display  # optional: also show person alerts on a Cast display
+        self.display_early = (cfg or {}).get("display_early", True) is not False
         self.registry_fn, self.logfile, self.clock, self.sleep = registry_fn, logfile, clock, sleep
         self.poll_s = float(c.get("poll_s", 1))
         self.cooldown = int(c.get("cooldown_s", 45))
@@ -263,6 +264,7 @@ class CameraWatcher:
         self.count += 1
         name = self._name(cam)
         t0 = time.monotonic()
+        pre = None
         try:
             images = self._grab(cam, first)
             if not images:
@@ -270,20 +272,27 @@ class CameraWatcher:
             t1 = time.monotonic()
             sess = self.present.get(cam)
             earlier = sess["people"] if sess and now - sess["t"] <= self.window else []
+            if self.display and self.display_early and cam not in self.polled and not earlier:
+                # nobody was in view and the camera just sensed someone: show it now, before the AI has answered
+                pre = self.display.show(base64.b64decode(images[0][1]), cam)
             res = self._analyse(name, images, earlier)
             log.info("%s checked: snapshot %.1fs + AI %.1fs = %.1fs, person=%s", cam, t1 - t0, time.monotonic() - t1,
                      time.monotonic() - t0, res["person"])
         except Exception as e:
+            if pre:
+                self.display.clear(pre)
             self._fail(cam, name, now, e)
             return
         self._log(cam, res)
+        if pre and not (res["person"] and res["people"]):
+            self.display.clear(pre)  # false alarm (leaves, shadows): take it down again
         if res["person"]:
             new = [p for p in res["people"] if not (earlier and p["same"])] if earlier else res["people"]
             self.present[cam] = {"people": [p["description"] for p in res["people"] if p["description"]] or earlier,
                                  "t": now}
             if new:
                 self._alert_people(name, cam, new, res["confidence"])
-                if self.display:
+                if self.display and not pre:
                     try:
                         self.display.show(base64.b64decode(images[0][1]), cam)
                     except Exception as e:
