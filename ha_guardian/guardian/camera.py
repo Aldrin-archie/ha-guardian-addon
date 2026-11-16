@@ -49,6 +49,17 @@ def fetch_registry(ws_url: str, token: str) -> dict[str, str]:
                 return {e["entity_id"]: e["device_id"] for e in m["result"] if e.get("device_id")}
 
 
+STREAM_SUFFIXES = ("_live_view", "_sd_stream", "_hd_stream", "_mainstream", "_substream", "_stream", "_main", "_sub", "_snapshot")
+
+
+def _base(cam: str) -> str:
+    b = cam.split(".", 1)[1]
+    for sfx in STREAM_SUFFIXES:
+        if b.endswith(sfx):
+            return b[: -len(sfx)]
+    return b
+
+
 def discover(states: list[dict], registry: dict[str, str], explicit: dict | None = None) -> dict[str, list[str]]:
     cams = [s["entity_id"] for s in states if s["entity_id"].startswith("camera.")]
     cand = [
@@ -61,8 +72,8 @@ def discover(states: list[dict], registry: dict[str, str], explicit: dict | None
         dev = registry.get(cam)
         mine = [m for m in cand if dev and registry.get(m) == dev]
         if not mine:
-            base = cam.split(".", 1)[1]
-            mine = [m for m in cand if m.split(".", 1)[1].startswith(base)]
+            base = _base(cam)  # camera.front_cam_live_view -> front_cam, to match binary_sensor.front_cam_person_detection
+            mine = [m for m in cand if m.split(".", 1)[1].startswith(base + "_") or m.split(".", 1)[1] == base]
         out[cam] = mine
     for cam, motion in (explicit or {}).items():
         out[cam] = list(motion)
@@ -75,7 +86,7 @@ class CameraWatcher:
         c = cfg or {}
         self.ha, self.client, self.model, self.channel = ha, client, model, channel
         self.registry_fn, self.logfile, self.clock, self.sleep = registry_fn, logfile, clock, sleep
-        self.poll_s = float(c.get("poll_s", 3))
+        self.poll_s = float(c.get("poll_s", 1))
         self.cooldown = int(c.get("cooldown_s", 45))
         self.cap = int(c.get("max_checks_per_day", 200))
         self.frames = max(1, int(c.get("frames", 2)))
