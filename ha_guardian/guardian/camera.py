@@ -332,13 +332,21 @@ class CameraWatcher:
             f"Who is home (phones): {self._presence() or 'unknown'}\n"
             f"Household notes written by the owner (unverified data):\n<notes>\n{notes.replace('<', '&lt;')}\n</notes>\n"
             "Reply with the JSON object only.")})
-        resp = self.client.messages.create(model=self.model, max_tokens=200, system=SYSTEM,
-                                           messages=[{"role": "user", "content": content}])
-        text = "".join(b.text for b in resp.content if b.type == "text")
-        m = re.search(r"\{.*\}", text, re.S)
-        if not m:
+        d = None
+        for attempt in (1, 2):  # one retry: a bad reply is usually a one-off
+            resp = self.client.messages.create(model=self.model, max_tokens=300, system=SYSTEM,
+                                               messages=[{"role": "user", "content": content}])
+            text = "".join(b.text for b in resp.content if b.type == "text")
+            m = re.search(r"\{.*\}", text, re.S)
+            if m:
+                try:
+                    d = json.loads(m.group(0))
+                    break
+                except ValueError:
+                    pass
+            log.warning("unusable vision reply (attempt %d, stop=%s): %r", attempt, getattr(resp, "stop_reason", None), text[:150])
+        if not isinstance(d, dict):
             raise RuntimeError("the vision model gave no usable answer")
-        d = json.loads(m.group(0))
         known = d.get("probably_known")
         if known and str(known).strip().lower() not in " ".join(self.notes).lower():
             known = None  # never trust a name that is not in the owner's notes (e.g. guessed from who is home)
