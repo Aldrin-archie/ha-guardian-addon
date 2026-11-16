@@ -48,6 +48,10 @@ class CastDisplay:
             def log_message(self, *a):
                 pass
 
+            def handle_one_request(self):
+                super().handle_one_request()
+                log.info("display: %s asked for the picture (%s)", self.client_address[0], self.path[:8] + "...")
+
         self.server = ThreadingHTTPServer(("0.0.0.0", self.port), H)
         threading.Thread(target=self.server.serve_forever, daemon=True, name="display-http").start()
 
@@ -65,7 +69,12 @@ class CastDisplay:
             with self.lock:
                 self.images = {token: jpeg}
             url = f"http://{self.host or lan_ip()}:{self.port}/{token}.jpg"
+            log.info("display: showing a snapshot at %s", url.rsplit("/", 1)[0] + "/...")
             for p in self.players:
+                try:
+                    log.info("display: %s is '%s' before the picture", p, self.ha.state(p).get("state"))
+                except Exception:
+                    pass
                 try:
                     self.ha.call_service("media_player", "play_media", {
                         "entity_id": p, "media_content_id": url, "media_content_type": "image/jpeg"})
@@ -78,6 +87,13 @@ class CastDisplay:
                     except Exception as e:
                         log.warning("live view on %s failed, keeping the snapshot: %s", p, e)
             time.sleep(self.seconds)
+            for p in self.players:
+                try:
+                    st = self.ha.state(p)
+                    log.info("display: %s is '%s' (playing %s)", p, st.get("state"),
+                             (st.get("attributes") or {}).get("media_content_type"))
+                except Exception:
+                    pass
             with self.lock:
                 if self.gen != mine:  # a newer alert took over the display: leave it alone
                     self.images.pop(token, None)
@@ -91,3 +107,16 @@ class CastDisplay:
                 self.images.pop(token, None)
         except Exception as e:
             log.warning("display failed: %s", e)
+
+
+def test_picture() -> bytes:
+    import io
+
+    from PIL import Image, ImageDraw
+
+    im = Image.new("RGB", (1024, 600), (16, 24, 40))
+    d = ImageDraw.Draw(im)
+    d.text((60, 260), "HA Guardian: display test", fill=(255, 255, 255))
+    out = io.BytesIO()
+    im.save(out, "JPEG", quality=85)
+    return out.getvalue()

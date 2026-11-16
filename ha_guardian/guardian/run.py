@@ -162,6 +162,9 @@ def _run_cameras(s: config.Settings, ch) -> None:
         display = CastDisplay(HAClient(s.ha_url, s.monitor_token), players, live=live,
                               seconds=int(cfg.get("display_seconds", 10 if live else 8)))
         print(f"Person alerts also go to the display: {', '.join(players)}", flush=True)
+        from .display import test_picture
+
+        display.show(test_picture())  # a test card at start-up: shows straight away whether the display works
     try:
         CameraWatcher(
             HAClient(s.ha_url, s.monitor_token, timeout=20), make_client(), cfg.get("model") or s.triage_model, ch, cfg,
