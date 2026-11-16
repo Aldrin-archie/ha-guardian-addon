@@ -33,7 +33,7 @@ class CastDisplay:
         outer = self
 
         class H(BaseHTTPRequestHandler):
-            def do_GET(self):
+            def _serve(self, body: bool):
                 with outer.lock:
                     data = outer.images.get(self.path.strip("/").removesuffix(".jpg"))
                 if not data:
@@ -42,8 +42,17 @@ class CastDisplay:
                 self.send_response(200)
                 self.send_header("Content-Type", "image/jpeg")
                 self.send_header("Content-Length", str(len(data)))
+                self.send_header("Access-Control-Allow-Origin", "*")  # Cast receivers fetch media like a web page
+                self.send_header("Cache-Control", "no-store")
                 self.end_headers()
-                self.wfile.write(data)
+                if body:
+                    self.wfile.write(data)
+
+            def do_GET(self):
+                self._serve(True)
+
+            def do_HEAD(self):
+                self._serve(False)
 
             def log_message(self, *a):
                 pass
@@ -72,7 +81,12 @@ class CastDisplay:
             log.info("display: showing a snapshot at %s", url.rsplit("/", 1)[0] + "/...")
             for p in self.players:
                 try:
-                    log.info("display: %s is '%s' before the picture", p, self.ha.state(p).get("state"))
+                    before = self.ha.state(p).get("state")
+                    log.info("display: %s is '%s' before the picture", p, before)
+                    if before not in ("idle", "off", "standby", "unavailable"):
+                        # a leftover session (e.g. a paused video) can keep the picture from showing: close it first
+                        self.ha.call_service("media_player", "turn_off", {"entity_id": p})
+                        time.sleep(1.5)
                 except Exception:
                     pass
                 try:
@@ -86,21 +100,23 @@ class CastDisplay:
                         self.ha.call_service("camera", "play_stream", {"entity_id": camera, "media_player": p, "format": "hls"})
                     except Exception as e:
                         log.warning("live view on %s failed, keeping the snapshot: %s", p, e)
-            time.sleep(self.seconds)
+            time.sleep(min(2, self.seconds))
             for p in self.players:
                 try:
                     st = self.ha.state(p)
-                    log.info("display: %s is '%s' (playing %s)", p, st.get("state"),
-                             (st.get("attributes") or {}).get("media_content_type"))
+                    a = st.get("attributes") or {}
+                    log.info("display: 2 s in, %s is '%s', app '%s', type '%s'", p, st.get("state"), a.get("app_name"),
+                             a.get("media_content_type"))
                 except Exception:
                     pass
+            time.sleep(max(0, self.seconds - 2))
             with self.lock:
                 if self.gen != mine:  # a newer alert took over the display: leave it alone
                     self.images.pop(token, None)
                     return
             for p in self.players:
                 try:
-                    self.ha.call_service("media_player", "media_stop", {"entity_id": p})
+                    self.ha.call_service("media_player", "turn_off", {"entity_id": p})
                 except Exception:
                     pass
             with self.lock:
