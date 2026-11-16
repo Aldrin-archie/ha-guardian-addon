@@ -81,7 +81,7 @@ def load_addon(
     shown = opts.get("display_players")
     monitor.setdefault("cameras", {})["display_players"] = (
         "media_player.family_room_display" if shown is None else str(shown).strip())
-    monitor["cameras"]["display_live"] = opts.get("display_live", True) is not False
+    monitor["cameras"]["display_live"] = opts.get("display_live_video", False) is True
     models = cfg.get("models", {})
     chat_id = str(opts.get("telegram_chat_id") or "").strip()
     d = Path(data_dir)

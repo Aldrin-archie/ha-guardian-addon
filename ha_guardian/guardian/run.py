@@ -158,7 +158,7 @@ def _run_cameras(s: config.Settings, ch) -> None:
     if players:
         from .display import CastDisplay
 
-        live = cfg.get("display_live", True) is not False
+        live = cfg.get("display_live", False) is True
         display = CastDisplay(HAClient(s.ha_url, s.monitor_token), players, live=live,
                               seconds=int(cfg.get("display_seconds", 10 if live else 8)))
         print(f"Person alerts also go to the display: {', '.join(players)}", flush=True)

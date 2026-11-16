@@ -61,5 +61,5 @@ You should see "Guardian online" in Telegram.
 
 `display_players` (add-on Configuration) is a comma-separated list of Google Cast media players, default
 `media_player.family_room_display`. Each new-person alert also shows the snapshot on them for 10 seconds
-(`monitor.cameras.display_seconds`; 8 if live view is off). The snapshot appears at once and, with `display_live` on, is replaced by a live video of the camera when its stream is ready. The add-on serves the picture on port 8765 of the Home Assistant machine, under an
+(`monitor.cameras.display_seconds`; 8 if live view is off). The snapshot appears at once and, with `display_live_video` on (experimental, off by default: it needs a camera stream the Hub can play), is replaced by a live video of the camera when its stream is ready. The add-on serves the picture on port 8765 of the Home Assistant machine, under an
 unguessable one-time address. Clear the option to switch it off.
