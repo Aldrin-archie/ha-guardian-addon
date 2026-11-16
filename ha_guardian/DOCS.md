@@ -9,6 +9,8 @@ Control your home from Telegram with Claude, and get alerts when something looks
 | `telegram_bot_token` | Token from @BotFather (optional but needed for chat and for approving actions). |
 | `telegram_chat_id` | Your own Telegram chat id. Only this chat is obeyed. |
 | `control_model` / `triage_model` | Leave blank for defaults (Sonnet for chat, Haiku for triage). |
+| `device_health_alerts` | Default off. Turn on to be told about offline devices, low batteries and low printer ink. |
+| `internet_alerts` | Default off. Turn on to be told when the internet or router goes down and comes back. |
 | `mobile_notify_service` | Optional. Phones to alert, comma separated, e.g. `mobile_app_my_phone, mobile_app_partner_phone`. The FIRST gets alerts and Approve/Deny buttons; the rest get alerts only. Needed if several phones are registered. |
 
 ## Guardian Chat panel

@@ -1,5 +1,5 @@
 name: HA Guardian
-version: "0.4.8"
+version: "0.4.9"
 slug: ha_guardian
 description: Claude-powered home control over Telegram plus a security monitor that watches for attacks
 arch:
@@ -28,6 +28,8 @@ options:
   triage_model: ""
   mobile_notify_service: ""
   create_dashboard: true
+  device_health_alerts: false
+  internet_alerts: false
 schema:
   anthropic_api_key: password?
   telegram_bot_token: password?
@@ -36,3 +38,5 @@ schema:
   triage_model: str?
   mobile_notify_service: str?
   create_dashboard: bool?
+  device_health_alerts: bool?
+  internet_alerts: bool?

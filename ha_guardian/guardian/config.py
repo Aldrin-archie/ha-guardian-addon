@@ -73,6 +73,10 @@ def load_addon(
         user.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(default_cfg, user)
     cfg = yaml.safe_load(user.read_text()) or {}
+    # Add-on switches (Configuration tab) decide which optional alert families run; both are OFF unless switched on.
+    monitor = cfg.setdefault("monitor", {})
+    for key, opt in (("health", "device_health_alerts"), ("connectivity", "internet_alerts")):
+        monitor.setdefault(key, {})["enabled"] = opts.get(opt, False) is True
     models = cfg.get("models", {})
     chat_id = str(opts.get("telegram_chat_id") or "").strip()
     d = Path(data_dir)
