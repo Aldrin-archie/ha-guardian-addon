@@ -78,14 +78,14 @@ class CameraWatcher:
         self.poll_s = float(c.get("poll_s", 3))
         self.cooldown = int(c.get("cooldown_s", 45))
         self.cap = int(c.get("max_checks_per_day", 200))
-        self.frames = max(1, int(c.get("frames", 3)))
-        self.gap = float(c.get("frame_gap_s", 1.5))
+        self.frames = max(1, int(c.get("frames", 2)))
+        self.gap = float(c.get("frame_gap_s", 0.7))
         self.alert_animals = bool(c.get("alert_animals", False))
         self.notes = [str(n) for n in c.get("people_notes", [])]
         self.ignore = set(c.get("ignore", []))
         # Fallback for cameras with no motion sensor in HA: compare snapshots ourselves, call Claude only on change.
         self.frame_diff = c.get("frame_diff", True) is not False
-        self.diff_interval = float(c.get("diff_interval_s", 5))
+        self.diff_interval = float(c.get("diff_interval_s", 2))
         self.diff_level = int(c.get("diff_level", 25))       # per-pixel change (0-255) that counts as "changed"
         self.diff_area = float(c.get("diff_area", 0.01))     # fraction of the picture that must change
         self.fallback_cooldown = int(c.get("fallback_cooldown_s", 90))
@@ -167,7 +167,7 @@ class CameraWatcher:
             return
         changed = sum(1 for a, b in zip(prev, small) if abs(a - b) > self.diff_level) / len(small)
         if changed >= self.diff_area:
-            self.handle(cam, now)
+            self.handle(cam, now, first=r.content)
 
     def run(self) -> None:
         while True:
@@ -178,7 +178,7 @@ class CameraWatcher:
             self.sleep(self.poll_s)
 
     # -- one motion event ------------------------------------------------------------------
-    def handle(self, cam: str, now: float) -> None:
+    def handle(self, cam: str, now: float, first: bytes | None = None) -> None:
         cooldown = self.fallback_cooldown if cam in self.polled else self.cooldown
         if now - self.last_check.get(cam, -1e9) < cooldown:
             return
@@ -195,7 +195,7 @@ class CameraWatcher:
         self.count += 1
         name = self._name(cam)
         try:
-            images = self._grab(cam)
+            images = self._grab(cam, first)
             if not images:
                 raise RuntimeError("no snapshot from the camera")
             res = self._analyse(name, images)
@@ -234,9 +234,15 @@ class CameraWatcher:
         except Exception:
             return cam
 
-    def _grab(self, cam: str) -> list[tuple[str, str]]:
+    def _grab(self, cam: str, first: bytes | None = None) -> list[tuple[str, str]]:
         out = []
-        for i in range(self.frames):
+        start = 0
+        if first:  # the snapshot that triggered the check is already frame 1
+            out.append(("image/jpeg", base64.b64encode(first).decode()))
+            start = 1
+            if self.frames > 1:
+                self.sleep(self.gap)
+        for i in range(start, self.frames):
             r = self.ha.http.get(f"/api/camera_proxy/{cam}")
             if r.status_code == 200 and r.content:
                 mt = r.headers.get("content-type", "image/jpeg").split(";")[0].strip().lower()

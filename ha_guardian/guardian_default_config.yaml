@@ -59,9 +59,9 @@ monitor:
     # model: claude-sonnet-5-5      # default is the cheaper triage model; use a bigger one for fewer misses
     cooldown_s: 45                  # minimum seconds between checks of the same camera
     max_checks_per_day: 200         # hard cost limit
-    frames: 3                       # snapshots taken per motion event
+    frames: 2                       # snapshots sent to Claude per motion event (more = slower, slightly surer)
     frame_diff: true                # cameras with no HA motion sensor: compare snapshots every diff_interval_s
-    diff_interval_s: 5
+    diff_interval_s: 2
     diff_area: 0.01                 # share of the picture that must change (raise it if wind keeps triggering)
     fallback_cooldown_s: 90         # minimum seconds between checks for such cameras
     alert_animals: false            # true = also push for pets/animals
