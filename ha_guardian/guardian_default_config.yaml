@@ -58,6 +58,7 @@ monitor:
     enabled: true
     # model: claude-sonnet-5-5      # default is the cheaper triage model; use a bigger one for fewer misses
     cooldown_s: 45                  # minimum seconds between checks of the same camera
+    same_person_window_s: 120   # a person still in view within this window is not announced again
     max_checks_per_day: 200         # hard cost limit
     frames: 1                       # snapshots sent to Claude per motion event (1 = fastest; 2-3 = slightly surer, slower)
     frame_diff: true                # cameras with no HA motion sensor: compare snapshots every diff_interval_s
