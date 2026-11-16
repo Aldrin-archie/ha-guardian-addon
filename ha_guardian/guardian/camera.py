@@ -10,6 +10,7 @@ import io
 import json
 import logging
 import re
+import threading
 import time
 from datetime import date, datetime
 
@@ -159,6 +160,8 @@ class CameraWatcher:
         self.last_fail: dict[str, float] = {}
         self.day, self.count, self.cap_told = None, 0, False
         # Who is in view on each camera right now, so one person standing there is one alert, not one per movement.
+        self.keep_warm = float(c.get("keep_warm_s", 20))   # 0 = off; grab a throwaway frame so idle cameras answer fast
+        self.last_warm: dict[str, float] = {}
         self.window = int(c.get("same_person_window_s", 120))
         self.present: dict[str, dict] = {}
         self.pending: set[str] = set()      # motion that arrived during the cooldown: re-check once it ends
@@ -236,7 +239,33 @@ class CameraWatcher:
         if changed >= self.diff_area:
             self.handle(cam, now, first=r.content)
 
+    def _warm_once(self, now: float) -> list[str]:
+        """Wake cameras that have been idle: the first snapshot after a pause takes ~6 s, later ones ~1.5 s."""
+        done = []
+        for cam, motion in list(self.mapping.items()):
+            if cam in self.ignore or not motion:
+                continue
+            if now - self.last_warm.get(cam, -1e9) < self.keep_warm or now - self.last_check.get(cam, -1e9) < self.keep_warm:
+                continue
+            self.last_warm[cam] = now
+            try:
+                self.ha.http.get(f"/api/camera_proxy/{cam}")
+                done.append(cam)
+            except Exception as e:
+                log.debug("keep-warm grab failed for %s: %s", cam, e)
+        return done
+
+    def _warm_loop(self) -> None:
+        while True:
+            try:
+                self._warm_once(self.clock())
+            except Exception as e:
+                log.debug("keep-warm error: %s", e)
+            self.sleep(2)
+
     def run(self) -> None:
+        if self.keep_warm > 0:
+            threading.Thread(target=self._warm_loop, daemon=True, name="camera-warm").start()
         while True:
             try:
                 self.tick()
