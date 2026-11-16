@@ -346,7 +346,7 @@ class CameraWatcher:
             "Reply with the JSON object only.")})
         d = None
         for attempt in (1, 2):  # one retry: a bad reply is usually a one-off
-            resp = self.client.messages.create(model=self.model, max_tokens=300, system=SYSTEM,
+            resp = self.client.messages.create(model=self.model, max_tokens=1500, system=SYSTEM,
                                                messages=[{"role": "user", "content": content}])
             text = "".join(b.text for b in resp.content if b.type == "text")
             m = re.search(r"\{.*\}", text, re.S)
