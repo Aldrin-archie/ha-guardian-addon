@@ -158,7 +158,9 @@ def _run_cameras(s: config.Settings, ch) -> None:
     if players:
         from .display import CastDisplay
 
-        display = CastDisplay(HAClient(s.ha_url, s.monitor_token), players, seconds=int(cfg.get("display_seconds", 30)))
+        live = cfg.get("display_live", True) is not False
+        display = CastDisplay(HAClient(s.ha_url, s.monitor_token), players, live=live,
+                              seconds=int(cfg.get("display_seconds", 10 if live else 8)))
         print(f"Person alerts also go to the display: {', '.join(players)}", flush=True)
     try:
         CameraWatcher(

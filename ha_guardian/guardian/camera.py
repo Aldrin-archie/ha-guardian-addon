@@ -285,7 +285,7 @@ class CameraWatcher:
                 self._alert_people(name, cam, new, res["confidence"])
                 if self.display:
                     try:
-                        self.display.show(base64.b64decode(images[0][1]))
+                        self.display.show(base64.b64decode(images[0][1]), cam)
                     except Exception as e:
                         log.warning("display error: %s", e)
             return

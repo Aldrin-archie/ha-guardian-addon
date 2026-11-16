@@ -1,5 +1,5 @@
 name: HA Guardian
-version: "0.6.0"
+version: "0.6.1"
 slug: ha_guardian
 description: Claude-powered home control over Telegram plus a security monitor that watches for attacks
 arch:
@@ -31,6 +31,7 @@ options:
   device_health_alerts: false
   internet_alerts: false
   display_players: "media_player.family_room_display"
+  display_live: true
 schema:
   anthropic_api_key: password?
   telegram_bot_token: password?
@@ -42,3 +43,4 @@ schema:
   device_health_alerts: bool?
   internet_alerts: bool?
   display_players: str?
+  display_live: bool?

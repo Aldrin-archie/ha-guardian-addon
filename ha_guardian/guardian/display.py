@@ -19,8 +19,9 @@ def lan_ip() -> str:
 
 
 class CastDisplay:
-    def __init__(self, ha, players, port=8765, seconds=30, host=None):
+    def __init__(self, ha, players, port=8765, seconds=10, host=None, live=False):
         self.ha, self.players, self.port, self.seconds = ha, list(players), int(port), int(seconds)
+        self.live, self.gen = live, 0
         self.host = host
         self.images: dict[str, bytes] = {}
         self.lock = threading.Lock()
@@ -50,11 +51,14 @@ class CastDisplay:
         self.server = ThreadingHTTPServer(("0.0.0.0", self.port), H)
         threading.Thread(target=self.server.serve_forever, daemon=True, name="display-http").start()
 
-    def show(self, jpeg: bytes) -> None:
+    def show(self, jpeg: bytes, camera: str | None = None) -> None:
         """Fire and forget: never delays or breaks the phone alert."""
-        threading.Thread(target=self._show, args=(jpeg,), daemon=True).start()
+        threading.Thread(target=self._show, args=(jpeg, camera), daemon=True).start()
 
-    def _show(self, jpeg: bytes) -> None:
+    def _show(self, jpeg: bytes, camera: str | None = None) -> None:
+        with self.lock:
+            self.gen += 1
+            mine = self.gen
         try:
             self._start()
             token = secrets.token_urlsafe(16)  # unguessable path: only the display we tell can fetch the picture
@@ -67,7 +71,17 @@ class CastDisplay:
                         "entity_id": p, "media_content_id": url, "media_content_type": "image/jpeg"})
                 except Exception as e:
                     log.warning("could not show the snapshot on %s: %s", p, e)
+            if self.live and camera:  # the live picture takes over from the snapshot as soon as the stream is ready
+                for p in self.players:
+                    try:
+                        self.ha.call_service("camera", "play_stream", {"entity_id": camera, "media_player": p, "format": "hls"})
+                    except Exception as e:
+                        log.warning("live view on %s failed, keeping the snapshot: %s", p, e)
             time.sleep(self.seconds)
+            with self.lock:
+                if self.gen != mine:  # a newer alert took over the display: leave it alone
+                    self.images.pop(token, None)
+                    return
             for p in self.players:
                 try:
                     self.ha.call_service("media_player", "media_stop", {"entity_id": p})
