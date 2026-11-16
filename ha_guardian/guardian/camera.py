@@ -32,7 +32,11 @@ Reply with ONE JSON object and nothing else:
 
 
 def fetch_registry(ws_url: str, token: str) -> dict[str, str]:
-    """entity_id -> device_id from the HA entity registry (needs an admin token)."""
+    """entity_id -> physical-device id from the HA registries (needs an admin token).
+
+    Devices from different integrations that share a hardware (MAC) address are the same physical device, e.g. a
+    camera added through both TP-Link and ONVIF, so they get the same id.
+    """
     from websockets.sync.client import connect
 
     with connect(ws_url, open_timeout=15, max_size=32 * 2**20) as ws:
@@ -40,13 +44,27 @@ def fetch_registry(ws_url: str, token: str) -> dict[str, str]:
         ws.send(json.dumps({"type": "auth", "access_token": token}))
         if json.loads(ws.recv()).get("type") != "auth_ok":
             raise RuntimeError("websocket auth failed")
-        ws.send(json.dumps({"id": 1, "type": "config/entity_registry/list"}))
-        while True:
-            m = json.loads(ws.recv())
-            if m.get("id") == 1 and m.get("type") == "result":
-                if not m.get("success"):
-                    raise RuntimeError(f"entity registry: {m.get('error')}")
-                return {e["entity_id"]: e["device_id"] for e in m["result"] if e.get("device_id")}
+
+        def call(n: int, kind: str):
+            ws.send(json.dumps({"id": n, "type": kind}))
+            while True:
+                m = json.loads(ws.recv())
+                if m.get("id") == n and m.get("type") == "result":
+                    if not m.get("success"):
+                        raise RuntimeError(f"{kind}: {m.get('error')}")
+                    return m["result"]
+
+        entities = call(1, "config/entity_registry/list")
+        try:
+            devices = call(2, "config/device_registry/list")
+        except Exception as e:
+            log.warning("device registry unavailable (%s); pairing by device only", e)
+            devices = []
+    phys: dict[str, str] = {}
+    for d in devices:
+        mac = next((str(c[1]).lower() for c in d.get("connections", []) if len(c) == 2 and c[0] == "mac"), None)
+        phys[d["id"]] = f"mac:{mac}" if mac else d["id"]
+    return {e["entity_id"]: phys.get(e["device_id"], e["device_id"]) for e in entities if e.get("device_id")}
 
 
 STREAM_SUFFIXES = ("_live_view", "_sd_stream", "_hd_stream", "_mainstream", "_substream", "_stream", "_main", "_sub", "_snapshot")
@@ -75,9 +93,20 @@ def discover(states: list[dict], registry: dict[str, str], explicit: dict | None
             base = _base(cam)  # camera.front_cam_live_view -> front_cam, to match binary_sensor.front_cam_person_detection
             mine = [m for m in cand if m.split(".", 1)[1].startswith(base + "_") or m.split(".", 1)[1] == base]
         out[cam] = mine
+    # Two camera entities driven by the very same sensors are one physical camera (e.g. TP-Link + ONVIF entries):
+    # watch it once, preferring the entity that is not a raw "...stream" feed.
+    kept: dict[str, list[str]] = {}
+    used: set[tuple] = set()
+    for cam in sorted(out, key=lambda c: (c.split(".", 1)[1].endswith(("stream", "_main", "_sub")), c)):
+        key = tuple(sorted(out[cam]))
+        if key and key in used:
+            continue
+        if key:
+            used.add(key)
+        kept[cam] = out[cam]
     for cam, motion in (explicit or {}).items():
-        out[cam] = list(motion)
-    return out
+        kept[cam] = list(motion)
+    return kept
 
 
 class CameraWatcher:
