@@ -163,6 +163,29 @@ def _run_cameras(s: config.Settings, ch) -> None:
         print(f"(camera watcher stopped: {e})", flush=True)
 
 
+def _check_key(s: config.Settings, ch) -> None:
+    """Tell the owner clearly, once, if the Anthropic key does not work."""
+    import anthropic
+
+    try:
+        make_client().messages.create(model=s.triage_model, max_tokens=1, messages=[{"role": "user", "content": "hi"}])
+        print("Anthropic API key works.", flush=True)
+    except anthropic.AuthenticationError:
+        ch.send("🔑 Anthropic rejected the API key in the HA Guardian add-on, so camera checks, AI triage and chat won't work. "
+                "Create a key at console.anthropic.com > API keys (it starts with sk-ant-api03-), paste it into the add-on's "
+                "Configuration tab, save, and restart.")
+    except anthropic.PermissionDeniedError:
+        ch.send("🔑 Anthropic says this API key isn't allowed to use the model. Check the key's workspace and permissions.")
+    except anthropic.APIStatusError as e:
+        if e.status_code == 400 and "credit" in str(e).lower():
+            ch.send("💳 Your Anthropic account is out of credit. Add credit at console.anthropic.com > Billing; "
+                    "camera checks, AI triage and chat are paused until then.")
+        else:
+            print(f"(API key check: {e})", flush=True)
+    except Exception as e:  # network trouble etc: not the key's fault
+        print(f"(API key check skipped: {e})", flush=True)
+
+
 def _run_webchat(s: config.Settings) -> None:
     from .webchat import ChatApp, WebChannel, make_server
 
@@ -187,6 +210,7 @@ def cmd_addon(s: config.Settings) -> None:
         )
         ch = CompanionChannel(HAClient(s.ha_url, s.monitor_token), ws_url_from(s.ha_url), s.monitor_token, s.notify_service)
         ch.start()
+        threading.Thread(target=_check_key, args=(s, ch), daemon=True, name="keycheck").start()
         threading.Thread(target=_run_webchat, args=(s,), daemon=True, name="webchat").start()
         if (s.monitor.get("cameras", {}) or {}).get("enabled", True):
             threading.Thread(target=_run_cameras, args=(s, ch), daemon=True, name="cameras").start()
