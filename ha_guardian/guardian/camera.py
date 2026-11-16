@@ -128,9 +128,10 @@ def discover(states: list[dict], registry: dict[str, str], explicit: dict | None
 
 class CameraWatcher:
     def __init__(self, ha, client, model, channel, cfg=None, registry_fn=None, logfile=None,
-                 clock=time.time, sleep=time.sleep):
+                 clock=time.time, sleep=time.sleep, display=None):
         c = cfg or {}
         self.ha, self.client, self.model, self.channel = ha, client, model, channel
+        self.display = display  # optional: also show person alerts on a Cast display
         self.registry_fn, self.logfile, self.clock, self.sleep = registry_fn, logfile, clock, sleep
         self.poll_s = float(c.get("poll_s", 1))
         self.cooldown = int(c.get("cooldown_s", 45))
@@ -282,6 +283,11 @@ class CameraWatcher:
                                  "t": now}
             if new:
                 self._alert_people(name, cam, new, res["confidence"])
+                if self.display:
+                    try:
+                        self.display.show(base64.b64decode(images[0][1]))
+                    except Exception as e:
+                        log.warning("display error: %s", e)
             return
         self.present.pop(cam, None)  # nobody in view: the next person to appear is new
         if res["animals"] and self.alert_animals:

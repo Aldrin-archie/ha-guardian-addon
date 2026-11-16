@@ -77,6 +77,10 @@ def load_addon(
     monitor = cfg.setdefault("monitor", {})
     for key, opt in (("health", "device_health_alerts"), ("connectivity", "internet_alerts")):
         monitor.setdefault(key, {})["enabled"] = opts.get(opt, False) is True
+    # Cast display (Nest Hub) that also shows the snapshot; empty option switches it off.
+    shown = opts.get("display_players")
+    monitor.setdefault("cameras", {})["display_players"] = (
+        "media_player.family_room_display" if shown is None else str(shown).strip())
     models = cfg.get("models", {})
     chat_id = str(opts.get("telegram_chat_id") or "").strip()
     d = Path(data_dir)

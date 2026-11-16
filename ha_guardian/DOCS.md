@@ -56,3 +56,10 @@ You should see "Guardian online" in Telegram.
 - The add-on uses the Supervisor's token, which is powerful. The allowlist in `config.yaml` is what limits the
   chat agent, so review it before enabling Telegram.
 - Leave locks, the alarm and the garage on the approval list.
+
+## Show person alerts on a Nest Hub / Cast display
+
+`display_players` (add-on Configuration) is a comma-separated list of Google Cast media players, default
+`media_player.family_room_display`. Each new-person alert also shows the snapshot on them for 30 seconds
+(`monitor.cameras.display_seconds`). The add-on serves the picture on port 8765 of the Home Assistant machine, under an
+unguessable one-time address. Clear the option to switch it off.

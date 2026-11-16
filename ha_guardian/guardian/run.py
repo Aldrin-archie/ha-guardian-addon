@@ -153,11 +153,18 @@ def _run_cameras(s: config.Settings, ch) -> None:
     from .camera import CameraWatcher, fetch_registry
 
     cfg = s.monitor.get("cameras", {}) or {}
+    display = None
+    players = [x.strip() for x in str(cfg.get("display_players") or "").split(",") if x.strip()]
+    if players:
+        from .display import CastDisplay
+
+        display = CastDisplay(HAClient(s.ha_url, s.monitor_token), players, seconds=int(cfg.get("display_seconds", 30)))
+        print(f"Person alerts also go to the display: {', '.join(players)}", flush=True)
     try:
         CameraWatcher(
             HAClient(s.ha_url, s.monitor_token, timeout=20), make_client(), cfg.get("model") or s.triage_model, ch, cfg,
             registry_fn=lambda: fetch_registry(ws_url_from(s.ha_url), s.monitor_token),
-            logfile=s.data_dir / "camera_checks.jsonl",
+            logfile=s.data_dir / "camera_checks.jsonl", display=display,
         ).run()
     except Exception as e:
         print(f"(camera watcher stopped: {e})", flush=True)
