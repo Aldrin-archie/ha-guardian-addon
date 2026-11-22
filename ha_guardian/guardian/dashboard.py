@@ -72,6 +72,12 @@ def build(states: list[dict]) -> dict:
 
     # ---- Home ----------------------------------------------------------------------------------
     home: list[dict] = []
+    # One-tap controls: every script (e.g. Movie mode) and any automation that is a mode switch (name has "movie").
+    scripts = sorted(by_dom.get("script", []), key=_name)
+    modes = sorted((s for s in by_dom.get("automation", []) if "movie" in _name(s).lower()), key=_name)
+    if scripts or modes:
+        home.append(_heading("Controls"))
+        home += _tiles(scripts + modes)
     if people:
         home.append({"type": "glance", "title": "People", "entities": _ids(people), "show_state": True})
     if temps or hums:
